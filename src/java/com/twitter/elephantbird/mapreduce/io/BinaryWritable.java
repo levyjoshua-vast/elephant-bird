@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import org.apache.hadoop.io.BytesWritable;
+import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.WritableComparable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,9 @@ import org.slf4j.LoggerFactory;
  * A Hadoop Writable wrapper around a serialized messages like Protocol buffers.
  */
 public abstract class BinaryWritable<M> implements WritableComparable<BinaryWritable<M>> {
+
+  static boolean GET_BUFFER_LEN_HACK = true;
+
   private static final Logger LOG = LoggerFactory.getLogger(BinaryWritable.class);
 
   // NOTE: only one of message and messageBytes is non-null at any time so that
@@ -132,7 +136,7 @@ public abstract class BinaryWritable<M> implements WritableComparable<BinaryWrit
   public void readFields(DataInput in) throws IOException {
     message = null;
     messageBytes = null;
-    int size = in.readInt();
+    int size = (GET_BUFFER_LEN_HACK ? ((DataInputBuffer) in).getLength()  : in.readInt());
     if (size > 0) {
       byte[] buf = new byte[size];
       in.readFully(buf, 0, size);

@@ -132,6 +132,10 @@ public class ProtobufToPig {
         return bag;
       }
     } else {
+        if (fieldValue == null) {
+            // LOG.warn("VAST want to call ProtobufTuple(null), returning null instead
+            return null;
+        }
       return new ProtobufTuple((Message)fieldValue);
     }
   }

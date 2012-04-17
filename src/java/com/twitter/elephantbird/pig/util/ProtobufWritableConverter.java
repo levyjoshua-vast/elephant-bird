@@ -1,6 +1,9 @@
 package com.twitter.elephantbird.pig.util;
 
+import java.io.EOFException;
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
 
 import org.apache.pig.ResourceSchema;
 import org.apache.pig.ResourceSchema.ResourceFieldSchema;
@@ -11,6 +14,7 @@ import org.apache.pig.impl.logicalLayer.schema.Schema;
 import org.apache.pig.impl.logicalLayer.schema.Schema.FieldSchema;
 
 import com.google.common.base.Preconditions;
+import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
 import com.twitter.elephantbird.mapreduce.io.ProtobufWritable;
@@ -30,10 +34,19 @@ public class ProtobufWritableConverter<M extends Message> extends
   protected final ProtobufToPig protobufToPig;
   protected final Descriptor descriptor;
   protected final Schema expectedSchema;
+  boolean should_eat_size;
+  static int vast_read;
 
   public ProtobufWritableConverter(String protobufClassName) {
     super(new ProtobufWritable<M>());
     Preconditions.checkNotNull(protobufClassName);
+    if (protobufClassName.charAt(0) == '!') {
+        should_eat_size = true;
+        protobufClassName = protobufClassName.substring(1);
+    }
+    else {
+        should_eat_size = false;
+    }
     typeRef = PigUtil.getProtobufTypeRef(protobufClassName);
     protobufToPig = new ProtobufToPig();
     writable.setConverter(typeRef.getRawClass());
@@ -71,8 +84,21 @@ public class ProtobufWritableConverter<M extends Message> extends
 
   @Override
   public Object bytesToObject(DataByteArray dataByteArray) throws IOException {
-    return bytesToTuple(dataByteArray.get(), null);
-  }
+    byte[] to_parse;
+    if (should_eat_size) {
+        byte[] bytes = dataByteArray.get();
+        CodedInputStream cis = CodedInputStream.newInstance(bytes);
+        int size = cis.readRawVarint32();
+        if (size < 1) { return null; }
+        to_parse = new byte[size];
+        int start = bytes.length - size;
+        System.arraycopy(bytes, start, to_parse, 0, size);
+    }
+    else {
+        to_parse = dataByteArray.get();
+    }
+    return bytesToTuple(to_parse, null);
+ }
 
   @Override
   protected Tuple toTuple(ProtobufWritable<M> writable, ResourceFieldSchema schema)
